@@ -1,52 +1,59 @@
-services:
+version: "3.8"
 
+services:
   mongodb:
     image: mongo:4.2.15
-    command: --wiredTigerCacheSizeGB 1 # 50% of (max RAM - 1GB) - minimum 0.25 (Modify it depending on defined RAM limits)
-    deploy:
-      resources:
-        limits:
-          memory: 3G # Maximum memory to allocate (Modify it depending on host ressources - leave at least 1GB free for host)
-        reservations:
-          memory: 1G # Minimum memory required
+    command: --wiredTigerCacheSizeGB 1
     restart: always
     environment:
-      - MONGO_DB=pwndoc
+      MONGO_DB: pwndoc
+    volumes:
+      - mongodb_data:/data/db
     networks:
       - backend-internal
 
   pwndoc-backend:
-    environment:
-      - DB_SERVER=mongodb
-      - DB_NAME=pwndoc
-      - LT_URL=http://pwndoc-languagetools:8010
-      - LT_API_URL=http://pwndoc-languagetools:8020
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
     depends_on:
       - mongodb
-    restart: always
+    environment:
+      DB_SERVER: mongodb
+      DB_NAME: pwndoc
+      LT_URL: http://pwndoc-languagetools:8010
+      LT_API_URL: http://pwndoc-languagetools:8020
+    ports:
+      - "4242:4242"
     networks:
       - backend-internal
       - frontend-internal
 
   pwndoc-languagetools:
-    image: pwndoc/languagetools:prod
     build:
-      context: ./languagetool/
+      context: ./languagetool
       dockerfile: Dockerfile
     restart: always
-    environment:
-      - BACKEND_URL=https://pwndoc-backend:4242
     depends_on:
       - pwndoc-backend
+    environment:
+      BACKEND_URL: http://pwndoc-backend:4242
     volumes:
       - ./languagetool/custom-rules:/LanguageTool/custom-rules
     networks:
       - backend-internal
 
   pwndoc-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     restart: always
     depends_on:
       - pwndoc-backend
+    ports:
+      - "8080:80"
+      - "8443:8443"
     networks:
       - frontend-internal
 
@@ -55,3 +62,6 @@ networks:
     driver: bridge
   frontend-internal:
     driver: bridge
+
+volumes:
+  mongodb_data:
